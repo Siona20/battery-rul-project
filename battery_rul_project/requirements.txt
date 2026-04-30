@@ -1,7 +1,6 @@
 flask
-streamlit
 requests
-tensorflow
+tensorflow-cpu==2.13.0
 joblib
 numpy
 pandas
