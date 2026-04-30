@@ -1,0 +1,13 @@
+# Ignore dataset folders
+battery_rul_project/data/
+battery_rul_project/processed_data/
+
+# Ignore all CSV files
+*.csv
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore virtual environment
+venv/
