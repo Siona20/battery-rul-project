@@ -1,6 +1,0 @@
-tensorflow==2.11.0
-numpy
-pandas
-scikit-learn
-joblib
-h5py
