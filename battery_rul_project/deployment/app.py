@@ -370,7 +370,7 @@ with left:
 
         st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
         # ✅ FIX: Updated default API URL to point to the server's public IP
-        api_url = st.text_input("API Endpoint", value="http://43.205.208.227:5000/predict")
+        api_url = st.text_input("API Endpoint", value="https://battery-api-rp6s.onrender.com/predict")
         st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
         submitted = st.form_submit_button("Run Prediction →", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
