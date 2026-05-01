@@ -3,6 +3,9 @@ Battery Health Prediction API — FINAL FIXED VERSION
 """
 
 import os
+import sys
+import traceback
+
 import joblib
 import numpy as np
 import pandas as pd
@@ -10,20 +13,12 @@ import tensorflow as tf
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
+# ─────────────────────────────────────────────
+# APP INIT
+# ─────────────────────────────────────────────
 app = Flask(__name__)
 CORS(app)
 
-@app.route("/debug")
-def debug():
-    model_dir = os.path.join(BASE_DIR, "..", "model", "outputs", "models")
-    scaler_dir = SCALER_DIR
-
-    return {
-        "model_dir_exists": os.path.exists(model_dir),
-        "model_files": os.listdir(model_dir) if os.path.exists(model_dir) else [],
-        "scaler_dir_exists": os.path.exists(scaler_dir),
-        "scaler_files": os.listdir(scaler_dir) if os.path.exists(scaler_dir) else []
-    }
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
@@ -31,10 +26,17 @@ SEQ_LEN = 20
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-MODEL_PATH_SOH = os.path.join(BASE_DIR, "..", "model", "outputs", "models", "soh_best.keras")
-MODEL_PATH_RUL = os.path.join(BASE_DIR, "..", "model", "outputs", "models", "rul_best.keras")
-
+MODEL_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "model", "outputs", "models"))
 SCALER_DIR = os.path.join(BASE_DIR, "scalers")
+
+# ✅ USE THESE FILES (you confirmed they exist)
+MODEL_PATH_SOH = os.path.join(MODEL_DIR, "soh_best.keras")
+MODEL_PATH_RUL = os.path.join(MODEL_DIR, "rul_best.keras")
+
+print("BASE_DIR:", BASE_DIR)
+print("MODEL_DIR:", MODEL_DIR)
+print("SCALER_DIR:", SCALER_DIR)
+print("TF VERSION:", tf.__version__)
 
 # ─────────────────────────────────────────────
 # FEATURES
@@ -57,53 +59,58 @@ for f in PHYSICAL_FEATURES:
 
 ALL_FEATURES = PHYSICAL_FEATURES + rolling_feats
 
-
 # ─────────────────────────────────────────────
 # LOAD MODELS + SCALERS
 # ─────────────────────────────────────────────
 def load_assets():
-    print("🔍 DEBUG START")
+    try:
+        print("\n===== LOADING ASSETS =====")
 
-    print("BASE_DIR:", BASE_DIR)
-    print("SOH MODEL PATH:", MODEL_PATH_SOH)
-    print("RUL MODEL PATH:", MODEL_PATH_RUL)
-    print("SCALER DIR:", SCALER_DIR)
+        # CHECK DIRECTORIES
+        if not os.path.isdir(MODEL_DIR):
+            raise Exception(f"Model directory not found: {MODEL_DIR}")
 
-    # ✅ Check existence FIRST
-    if not os.path.exists(MODEL_PATH_SOH):
-        raise Exception(f"SOH model not found: {MODEL_PATH_SOH}")
+        if not os.path.isdir(SCALER_DIR):
+            raise Exception(f"Scaler directory not found: {SCALER_DIR}")
 
-    if not os.path.exists(MODEL_PATH_RUL):
-        raise Exception(f"RUL model not found: {MODEL_PATH_RUL}")
+        print("Model files:", os.listdir(MODEL_DIR))
+        print("Scaler files:", os.listdir(SCALER_DIR))
 
-    if not os.path.exists(SCALER_DIR):
-        raise Exception(f"Scaler dir not found: {SCALER_DIR}")
+        # LOAD MODELS (TF SAFE MODE FIX)
+        try:
+            soh_model = tf.keras.models.load_model(
+                MODEL_PATH_SOH, compile=False, safe_mode=False
+            )
+            rul_model = tf.keras.models.load_model(
+                MODEL_PATH_RUL, compile=False, safe_mode=False
+            )
+        except TypeError:
+            # fallback for older TF
+            soh_model = tf.keras.models.load_model(MODEL_PATH_SOH, compile=False)
+            rul_model = tf.keras.models.load_model(MODEL_PATH_RUL, compile=False)
 
-    print("📁 Model files:", os.listdir(os.path.dirname(MODEL_PATH_SOH)))
-    print("📁 Scaler files:", os.listdir(SCALER_DIR))
+        print("✅ Models loaded")
 
-    # ✅ Load models
-    soh_model = tf.keras.models.load_model(MODEL_PATH_SOH, compile=False)
-    rul_model = tf.keras.models.load_model(MODEL_PATH_RUL, compile=False)
+        # LOAD SCALERS
+        scalers = {
+            "soh_feat": joblib.load(os.path.join(SCALER_DIR, "soh_feat_scaler.pkl")),
+            "rul_feat": joblib.load(os.path.join(SCALER_DIR, "rul_feat_scaler.pkl")),
+            "rul_tgt": joblib.load(os.path.join(SCALER_DIR, "rul_tgt_scaler.pkl")),
+        }
 
-    # ✅ FIXED SCALER NAMES (MATCH YOUR GITHUB)
-    scalers = {
-        "soh_feat": joblib.load(os.path.join(SCALER_DIR, "soh_feat_scaler.pkl")),
-        "rul_feat": joblib.load(os.path.join(SCALER_DIR, "rul_feat_scaler.pkl")),
-        "rul_tgt": joblib.load(os.path.join(SCALER_DIR, "rul_tgt_scaler.pkl")),
-    }
+        print("✅ Scalers loaded")
+        print("===== SUCCESS =====\n")
 
-    print("✅ EVERYTHING LOADED SUCCESSFULLY")
-    return soh_model, rul_model, scalers
+        return soh_model, rul_model, scalers
+
+    except Exception as e:
+        print("\n❌ MODEL LOADING FAILED:")
+        traceback.print_exc()
+        return None, None, None
 
 
-# 🚨 IMPORTANT: DO NOT SILENCE ERRORS
-try:
-    soh_model, rul_model, scalers = load_assets()
-except Exception as e:
-    print("❌ CRITICAL ERROR:", str(e))
-    soh_model, rul_model, scalers = None, None, None
-
+# LOAD ON START
+soh_model, rul_model, scalers = load_assets()
 
 # ─────────────────────────────────────────────
 # FEATURE ENGINEERING
@@ -136,14 +143,28 @@ def build_feature_row(data):
 def make_sequence(row, seq_len):
     return np.repeat(row, seq_len, axis=0).reshape(1, seq_len, -1)
 
-
 # ─────────────────────────────────────────────
 # ROUTES
 # ─────────────────────────────────────────────
 @app.route("/health")
 def health():
     return jsonify({
-        "models_loaded": soh_model is not None and rul_model is not None
+        "models_loaded": soh_model is not None and rul_model is not None,
+        "scalers_loaded": scalers is not None
+    })
+
+
+@app.route("/debug")
+def debug():
+    return jsonify({
+        "model_dir": MODEL_DIR,
+        "model_files": os.listdir(MODEL_DIR) if os.path.exists(MODEL_DIR) else [],
+        "scaler_dir": SCALER_DIR,
+        "scaler_files": os.listdir(SCALER_DIR) if os.path.exists(SCALER_DIR) else [],
+        "soh_model_exists": os.path.exists(MODEL_PATH_SOH),
+        "rul_model_exists": os.path.exists(MODEL_PATH_RUL),
+        "models_loaded": soh_model is not None,
+        "scalers_loaded": scalers is not None
     })
 
 
@@ -160,12 +181,12 @@ def predict():
         # SOH
         soh_scaled = scalers["soh_feat"].transform(df)
         seq_soh = make_sequence(soh_scaled, SEQ_LEN)
-        soh = soh_model.predict(seq_soh)[0][0] * 100
+        soh = soh_model.predict(seq_soh, verbose=0)[0][0] * 100
 
         # RUL
         rul_scaled = scalers["rul_feat"].transform(df)
         seq_rul = make_sequence(rul_scaled, SEQ_LEN)
-        rul_pred = rul_model.predict(seq_rul)
+        rul_pred = rul_model.predict(seq_rul, verbose=0)
         rul = scalers["rul_tgt"].inverse_transform(rul_pred)[0][0]
 
         return jsonify({
@@ -174,7 +195,7 @@ def predict():
         })
 
     except Exception as e:
-        print("❌ PREDICT ERROR:", str(e))
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
@@ -182,4 +203,5 @@ def predict():
 # RUN
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
