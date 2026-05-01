@@ -1,5 +1,5 @@
 """
-Battery Health Prediction API — FIXED VERSION
+Battery Health Prediction API — FINAL FIXED VERSION
 """
 
 import os
@@ -17,16 +17,18 @@ CORS(app)
 # CONFIG
 # ─────────────────────────────────────────────
 SEQ_LEN = 20
-FAILURE_THRESHOLD = 0.70
 
-# ✅ FIXED PATHS (based on your GitHub structure)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# ✅ CORRECT PATHS
 MODEL_PATH_SOH = os.path.join(BASE_DIR, "..", "model", "outputs", "models", "soh_model.keras")
 MODEL_PATH_RUL = os.path.join(BASE_DIR, "..", "model", "outputs", "models", "rul_model.keras")
-SCALER_DIR     = os.path.join(BASE_DIR, "scalers")
 
-# Features
+SCALER_DIR = os.path.join(BASE_DIR, "scalers")
+
+# ─────────────────────────────────────────────
+# FEATURES
+# ─────────────────────────────────────────────
 PHYSICAL_FEATURES = [
     "avg_voltage",
     "min_voltage",
@@ -39,7 +41,6 @@ PHYSICAL_FEATURES = [
     "cycle_rank",
 ]
 
-# Interleaved rolling features
 rolling_feats = []
 for f in PHYSICAL_FEATURES:
     rolling_feats.extend([f"{f}_mean", f"{f}_std"])
@@ -51,32 +52,47 @@ ALL_FEATURES = PHYSICAL_FEATURES + rolling_feats
 # LOAD MODELS + SCALERS
 # ─────────────────────────────────────────────
 def load_assets():
-    try:
-        print("📂 BASE DIR:", BASE_DIR)
-        print("📂 MODEL DIR:", os.path.dirname(MODEL_PATH_SOH))
-        print("📂 SCALER DIR:", SCALER_DIR)
+    print("🔍 DEBUG START")
 
-        print("📁 Files in model dir:", os.listdir(os.path.dirname(MODEL_PATH_SOH)))
-        print("📁 Files in scaler dir:", os.listdir(SCALER_DIR))
+    print("BASE_DIR:", BASE_DIR)
+    print("SOH MODEL PATH:", MODEL_PATH_SOH)
+    print("RUL MODEL PATH:", MODEL_PATH_RUL)
+    print("SCALER DIR:", SCALER_DIR)
 
-        soh_model = tf.keras.models.load_model(MODEL_PATH_SOH, compile=False)
-        rul_model = tf.keras.models.load_model(MODEL_PATH_RUL, compile=False) 
+    # ✅ Check existence FIRST
+    if not os.path.exists(MODEL_PATH_SOH):
+        raise Exception(f"SOH model not found: {MODEL_PATH_SOH}")
 
-        scalers = {
-            "soh_feat": joblib.load(os.path.join(SCALER_DIR, "soh_feat_scaler.pkl")),
-            "rul_feat": joblib.load(os.path.join(SCALER_DIR, "rul_feat_scaler.pkl")),
-            "rul_tgt":  joblib.load(os.path.join(SCALER_DIR, "rul_tgt_scaler.pkl")),
-        }
+    if not os.path.exists(MODEL_PATH_RUL):
+        raise Exception(f"RUL model not found: {MODEL_PATH_RUL}")
 
-        print("✅ Models & scalers loaded successfully")
-        return soh_model, rul_model, scalers
+    if not os.path.exists(SCALER_DIR):
+        raise Exception(f"Scaler dir not found: {SCALER_DIR}")
 
-    except Exception as e:
-        print("❌ ERROR LOADING MODELS:", e)
-        return None, None, None
+    print("📁 Model files:", os.listdir(os.path.dirname(MODEL_PATH_SOH)))
+    print("📁 Scaler files:", os.listdir(SCALER_DIR))
+
+    # ✅ Load models
+    soh_model = tf.keras.models.load_model(MODEL_PATH_SOH, compile=False)
+    rul_model = tf.keras.models.load_model(MODEL_PATH_RUL, compile=False)
+
+    # ✅ FIXED SCALER NAMES (MATCH YOUR GITHUB)
+    scalers = {
+        "soh_feat": joblib.load(os.path.join(SCALER_DIR, "soh_feat_scaler.pkl")),
+        "rul_feat": joblib.load(os.path.join(SCALER_DIR, "rul_feat_scaler.pkl")),
+        "rul_tgt": joblib.load(os.path.join(SCALER_DIR, "rul_tgt_scaler.pkl")),
+    }
+
+    print("✅ EVERYTHING LOADED SUCCESSFULLY")
+    return soh_model, rul_model, scalers
 
 
-soh_model, rul_model, scalers = load_assets()
+# 🚨 IMPORTANT: DO NOT SILENCE ERRORS
+try:
+    soh_model, rul_model, scalers = load_assets()
+except Exception as e:
+    print("❌ CRITICAL ERROR:", str(e))
+    soh_model, rul_model, scalers = None, None, None
 
 
 # ─────────────────────────────────────────────
@@ -126,12 +142,12 @@ def predict():
     if soh_model is None or rul_model is None:
         return jsonify({"error": "Models not loaded"}), 500
 
-    data = request.get_json()
-
     try:
+        data = request.get_json()
+
         df = build_feature_row(data)
 
-        # SoH
+        # SOH
         soh_scaled = scalers["soh_feat"].transform(df)
         seq_soh = make_sequence(soh_scaled, SEQ_LEN)
         soh = soh_model.predict(seq_soh)[0][0] * 100
@@ -148,6 +164,7 @@ def predict():
         })
 
     except Exception as e:
+        print("❌ PREDICT ERROR:", str(e))
         return jsonify({"error": str(e)}), 500
 
 
