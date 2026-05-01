@@ -13,6 +13,17 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
+@app.route("/debug")
+def debug():
+    model_dir = os.path.join(BASE_DIR, "..", "model", "outputs", "models")
+    scaler_dir = SCALER_DIR
+
+    return {
+        "model_dir_exists": os.path.exists(model_dir),
+        "model_files": os.listdir(model_dir) if os.path.exists(model_dir) else [],
+        "scaler_dir_exists": os.path.exists(scaler_dir),
+        "scaler_files": os.listdir(scaler_dir) if os.path.exists(scaler_dir) else []
+    }
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
