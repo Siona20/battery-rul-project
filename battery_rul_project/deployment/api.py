@@ -59,8 +59,8 @@ def load_assets():
         print("📁 Files in model dir:", os.listdir(os.path.dirname(MODEL_PATH_SOH)))
         print("📁 Files in scaler dir:", os.listdir(SCALER_DIR))
 
-        soh_model = tf.keras.models.load_model(MODEL_PATH_SOH)
-        rul_model = tf.keras.models.load_model(MODEL_PATH_RUL)
+        soh_model = tf.keras.models.load_model(MODEL_PATH_SOH, compile=False)
+        rul_model = tf.keras.models.load_model(MODEL_PATH_RUL, compile=False) 
 
         scalers = {
             "soh_feat": joblib.load(os.path.join(SCALER_DIR, "soh_feat_scaler.pkl")),
