@@ -31,9 +31,8 @@ SEQ_LEN = 20
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ✅ CORRECT PATHS
-MODEL_PATH_SOH = os.path.join(BASE_DIR, "..", "model", "outputs", "models", "soh_model.keras")
-MODEL_PATH_RUL = os.path.join(BASE_DIR, "..", "model", "outputs", "models", "rul_model.keras")
+MODEL_PATH_SOH = os.path.join(BASE_DIR, "..", "model", "outputs", "models", "soh_best.keras")
+MODEL_PATH_RUL = os.path.join(BASE_DIR, "..", "model", "outputs", "models", "rul_best.keras")
 
 SCALER_DIR = os.path.join(BASE_DIR, "scalers")
 
